@@ -1,30 +1,29 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const Mood = require('../models/Mood');
-const User = require('../models/User');
+const authenticateToken = require('../middlewares/auth');
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+// POST /api/moods -> Crea un mood para el usuario autenticado (id del JWT)
+router.post('/', authenticateToken, async (req, res) => {
     try {
         const body = req.body;
         if (body == null || typeof body !== 'object') {
             return res.status(400).json({
                 message:
-                    'Cuerpo de la petición vacío o no JSON. En Postman: Body → raw → JSON y envía un objeto con user, todaysMood, feelings.'
+                    'Cuerpo de la petición vacío o no JSON. En Postman: Body → raw → JSON con todaysMood, feelings, etc.'
             });
         }
 
-        const { user: userId, todaysMood, feelings, aboutYourDay, sleepHours, createdAt } = body;
+        const userId = req.user.id;
 
-        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({ message: 'ID de usuario inválido' });
+        if (body.user != null && String(body.user) !== String(userId)) {
+            return res.status(403).json({
+                message: 'No puedes crear moods para otro usuario'
+            });
         }
 
-        const userExists = await User.exists({ _id: userId });
-        if (!userExists) {
-            return res.status(404).json({ message: 'Usuario no encontrado' });
-        }
+        const { todaysMood, feelings, aboutYourDay, sleepHours, createdAt } = body;
 
         const moodData = {
             user: userId,
@@ -55,25 +54,47 @@ router.post('/', async (req, res) => {
     }
 });
 
-
-router.get('/:userId', async (req, res) => {
+/**
+ * GET /api/moods?limit=<n>
+ * Últimos moods del usuario autenticado (id del JWT). No se acepta ?user= de otro id.
+ */
+router.get('/', authenticateToken, async (req, res) => {
     try {
-        const { userId } = req.params;
-        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({ message: 'ID de usuario inválido' });
+        const userId = req.user.id;
+
+        if (req.query.user != null && String(req.query.user) !== String(userId)) {
+            return res.status(403).json({
+                message: 'No puedes consultar los moods de otro usuario'
+            });
         }
 
-        const userExists = await User.exists({ _id: userId });
-        if (!userExists) {
-            return res.status(404).json({ message: 'Usuario no encontrado' });
+        const DEFAULT_LIMIT = 15;
+        const MAX_LIMIT = 30;
+        let limit = DEFAULT_LIMIT;
+        if (req.query.limit !== undefined && req.query.limit !== '') {
+            const parsed = parseInt(String(req.query.limit), 10);
+            if (Number.isNaN(parsed) || parsed < 1) {
+                return res.status(400).json({
+                    message: `limit debe ser un entero entre 1 y ${MAX_LIMIT}`
+                });
+            }
+            limit = Math.min(parsed, MAX_LIMIT);
         }
 
-        const moods = await Mood.find({ user: userId }).sort({ createdAt: -1 });
-        res.status(200).json(moods);
+        const moods = await Mood.find({ user: userId })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .lean();
+
+        res.status(200).json({
+            count: moods.length,
+            limit,
+            moods
+        });
     } catch (err) {
-        console.error(err);
+        console.error('GET /api/moods:', err.message, err);
         res.status(500).json({ message: 'Error al obtener los estados de ánimo' });
     }
-})
+});
 
 module.exports = router;
