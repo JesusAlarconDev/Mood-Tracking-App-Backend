@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const authenticateToken = require('../middlewares/auth');
+const uploadCloud = require('../config/cloudinary');
 
 const router = express.Router();
 
@@ -96,7 +97,7 @@ router.post('/login', async (req, res) => {
 });
 
 // PUT /api/users -> Update user
-router.put('/', authenticateToken, async (req, res) => {
+router.put('/', authenticateToken, uploadCloud.single('profilePicture'), async (req, res) => {
     try {
         const userId = req.user.id;
         const body = req.body;
@@ -131,6 +132,10 @@ router.put('/', authenticateToken, async (req, res) => {
         }
 
         if (name) user.name = name.trim();
+
+        if (req.file) {
+            user.profilePicture = req.file.path;
+        }
 
         await user.save();
 

@@ -6,10 +6,8 @@ const usersRoutes = require('./routes/users');
 const moodsRoutes = require('./routes/moods');
 const app = express();
 
-// Conectar a la base de datos
 connectDB();
 
-// Middleware para parsear JSON
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 3000;
