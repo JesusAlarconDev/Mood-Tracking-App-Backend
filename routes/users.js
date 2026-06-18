@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const authenticateToken = require('../middlewares/auth');
 
 const router = express.Router();
 
@@ -91,6 +92,60 @@ router.post('/login', async (req, res) => {
     } catch (err) {
         console.error('POST /api/users/login:', err.message, err);
         res.status(500).json({ message: 'Error al iniciar sesión' });
+    }
+});
+
+// PUT /api/users -> Update user
+router.put('/', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const body = req.body;
+        
+        if (body == null || typeof body !== 'object') {
+            return res.status(400).json({
+                message: 'Cuerpo de la petición vacío o no JSON. En Postman: Body → raw → JSON.'
+            });
+        }
+
+        const { name, email } = body;
+
+        if ((name !== undefined && !name.trim()) || (email !== undefined && !email.trim())) {
+            return res.status(400).json({ message: 'Los campos no pueden estar vacíos' });
+        }
+        
+        if (!name && !email) {
+            return res.status(400).json({ message: 'Se requiere al menos un campo para actualizar (name o email)' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+
+        if (email && email !== user.email) {
+            const emailExists = await User.findOne({ email: email.toLowerCase() });
+            if (emailExists) {
+                return res.status(400).json({ message: 'El correo electrónico ya está en uso' });
+            }
+            user.email = email.toLowerCase();
+        }
+
+        if (name) user.name = name.trim();
+
+        await user.save();
+
+        res.status(200).json({
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name,
+                profilePicture: user.profilePicture
+            }
+        });
+
+    } catch (err) {
+        console.error('PUT /api/users:', err.message, err);
+        res.status(500).json({ message: 'Error al actualizar el usuario' });
     }
 });
 

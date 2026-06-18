@@ -9,16 +9,8 @@ const app = express();
 // Conectar a la base de datos
 connectDB();
 
-// JSON: en producción solo si Content-Type es JSON (correcto). En dev, tolerar body sin header (Postman mal puesto).
-function jsonBodyType(req) {
-    if (typeis(req, 'json') || typeis(req, '+json')) return true;
-    if (process.env.NODE_ENV !== 'production') {
-        if (!String(req.headers['content-type'] || '').trim() && typeis.hasBody(req)) return true;
-    }
-    return false;
-}
-
-app.use(express.json({ type: jsonBodyType }));
+// Middleware para parsear JSON
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 3000;
 
